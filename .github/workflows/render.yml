@@ -43,7 +43,7 @@ jobs:
     outputs:
       script-path: ${{ steps.generate.outputs.script-path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download Scene Script
         uses: actions/download-artifact@v4
