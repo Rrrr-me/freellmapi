@@ -1,0 +1,123 @@
+name: Automated Blender Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      scene:
+        description: 'Scene type to render'
+        required: true
+        type: choice
+        options:
+          - mystery_forest
+          - abstract_geometry
+          - product_showcase
+          - data_visualization
+          - ship_of_theseus
+      frames:
+        description: 'Number of frames'
+        required: false
+        default: '900'
+        type: string
+      resolution:
+        description: 'Resolution WxH'
+        required: false
+        default: '1920x1080'
+        type: string
+      engine:
+        description: 'Render engine'
+        required: false
+        default: 'CYCLES'
+        type: choice
+        options:
+          - CYCLES
+          - EEVEE
+      samples:
+        description: 'Render samples'
+        required: false
+        default: '128'
+        type: string
+
+jobs:
+  generate-scene:
+    runs-on: ubuntu-latest
+    outputs:
+      script-path: ${{ steps.generate.outputs.script-path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install freellmapi
+        run: |
+          pip install -e .
+
+      - name: Generate Scene Script
+        id: generate
+        run: |
+          python -m fact_agent.render_cli generate-scene ${{ github.event.inputs.scene }} \
+            --frame-end ${{ github.event.inputs.frames }} \
+            --resolution ${{ github.event.inputs.resolution }} \
+            --engine ${{ github.event.inputs.engine }} \
+            --samples ${{ github.event.inputs.samples }} \
+            --output scene.py
+          echo "script-path=scene.py" >> $GITHUB_OUTPUT
+
+      - name: Upload Scene Script
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-script
+          path: scene.py
+
+  render-blender:
+    needs: generate-scene
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Scene Script
+        uses: actions/download-artifact@v4
+        with:
+          name: scene-script
+          path: .
+
+      - name: Install Blender
+        run: |
+          wget -q "https://download.blender.org/release/Blender4.0/blender-4.0.2-linux-x64.tar.xz"
+          tar -xf blender-4.0.2-linux-x64.tar.xz
+          echo "$(pwd)/blender-4.0.2-linux-x64/blender" >> $GITHUB_PATH
+
+      - name: Render with Blender
+        run: |
+          blender --background --python scene.py
+
+      - name: Package Output
+        run: |
+          mkdir -p output
+          mv *.png output/ 2>/dev/null || true
+          mv *.jpg output/ 2>/dev/null || true
+          # Create video if frames exist
+          if ls *.png 1> /dev/null 2>&1; then
+            ffmpeg -framerate 30 -i "%04d.png" -c:v libx264 -pix_fmt yuv420p output/video.mp4
+          fi
+
+      - name: Upload Render Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-output
+          path: output/
+          retention-days: 30
+
+  notify:
+    needs: render-blender
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify Completion
+        run: |
+          STATUS="${{ needs.render-blender.result }}"
+          echo "Render ${{ github.event.inputs.scene }} completed with status: $STATUS"
+          # Add Slack/Discord/email notification here
