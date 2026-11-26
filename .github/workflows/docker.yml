@@ -29,8 +29,9 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+          # arm64 build disabled: better-sqlite3 compilation fails on arm64 runners
+          # - platform: linux/arm64
+          #   runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
